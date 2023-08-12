@@ -126,9 +126,9 @@ void delayUs(uint32_t us){
 extern "C" {
 #endif
 
-void LPTIM1_IRQHandler () {
-	LPTIM1 -> ICR = (LPTIM_ICR_ARRMCF | LPTIM_ICR_CMPMCF);
-	_uptime_ms_cnt++;
+void LPTIM1_IRQHandler () {									// Обработчик прерывания LPTIM1			
+	LPTIM1 -> ICR = (LPTIM_ICR_ARRMCF | LPTIM_ICR_CMPMCF);	// Сброс флага прерывания
+	_uptime_ms_cnt++;										// Инкремент счетчика
 }
 
 #ifdef __cplusplus
