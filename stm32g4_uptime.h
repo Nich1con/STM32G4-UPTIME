@@ -50,54 +50,66 @@ void delayUs(uint32_t us);
 
 /* =========================== Системное ============================== */
 void UPTIME_Init(void){
+	/* 1. Полный сброс таймера LPTIM1 */
 	UPTIME_Reset();
 
+	/* 2. Работаем от HSI16, он должен быть включен (на всякий случай) */
 	if(!(RCC -> CR & RCC_CR_HSION)){
-		RCC -> CR |= RCC_CR_HSION;
-		while(!(RCC -> CR & RCC_CR_HSIRDY));
+		RCC -> CR |= RCC_CR_HSION;			// Включаем HSI16
+		while(!(RCC -> CR & RCC_CR_HSIRDY));// Ждем выхода на режим
 	}
 
+	/* 3. Выбираем тактирование LPTIM1 от HSI16 */
 	MODIFY_REG(RCC -> CCIPR, RCC_CCIPR_LPTIM1SEL, RCC_CCIPR_LPTIM1SEL_1);
+	
+	/* 4. Включаем тактирование LPTIM1 */
 	RCC -> APB1ENR1 |= RCC_APB1ENR1_LPTIM1EN;
 
-	LPTIM1 -> CFGR = LPTIM_CFGR_PRESC_2;
-	LPTIM1 -> IER = LPTIM_IER_ARRMIE;
-	LPTIM1 -> CR = LPTIM_CR_ENABLE;
-	LPTIM1 -> ARR = LPTIM_ARR_VALUE;
-	LPTIM1 -> CR |= LPTIM_CR_CNTSTRT;
+	/* 5. Настраиваем таймер на период 1 мс и 1мкс/тик */
+	LPTIM1 -> CFGR = LPTIM_CFGR_PRESC_2;	// Делитель /16 для 16МГц
+	LPTIM1 -> IER = LPTIM_IER_ARRMIE;		// Вкл. прерывание по auto-reload
+	LPTIM1 -> CR = LPTIM_CR_ENABLE;			// Вкл. LPTIM1
+	LPTIM1 -> ARR = LPTIM_ARR_VALUE;		// Устанавливаем период таймера (1000 тиков)
+	LPTIM1 -> CR |= LPTIM_CR_CNTSTRT;		// Запускаем счёт
 
+	/* 6. Включаем прерывание таймера*/
 	NVIC_EnableIRQ(LPTIM1_IRQn);
 }
 
 void UPTIME_DeInit(void){
-	NVIC_DisableIRQ(LPTIM1_IRQn);
-	RCC -> APB1ENR1 &= ~RCC_APB1ENR1_LPTIM1EN;
-	UPTIME_Reset();
+	NVIC_DisableIRQ(LPTIM1_IRQn);					// Выкл. прерывание таймера
+	RCC -> APB1ENR1 &= ~RCC_APB1ENR1_LPTIM1EN;		// Выкл. тактирование таймера
+	UPTIME_Reset();									// Полный сброс
 }
 
-void UPTIME_Reset(void){
-	_uptime_ms_cnt = 0;
-	RCC -> APB1RSTR1 |= RCC_APB1RSTR1_LPTIM1RST;
-	RCC -> APB1RSTR1 &= ~RCC_APB1RSTR1_LPTIM1RST;
+void UPTIME_Reset(void){						
+	_uptime_ms_cnt = 0;								// Сброс счетчика
+	RCC -> APB1RSTR1 |= RCC_APB1RSTR1_LPTIM1RST;	// Установка аппаратного сброса	
+	RCC -> APB1RSTR1 &= ~RCC_APB1RSTR1_LPTIM1RST;	// Снятие сброса
 }
 
 void UPTIME_Suspend(void){
-	LPTIM1 -> CR &= ~LPTIM_CR_ENABLE;
+	LPTIM1 -> CR &= ~LPTIM_CR_ENABLE;				// Выкл. таймера
 }
 
 void UPTIME_Resume(void){
-	LPTIM1 -> CR |= LPTIM_CR_ENABLE;
-	LPTIM1 -> CR |= LPTIM_CR_CNTSTRT;
+	LPTIM1 -> CR |= LPTIM_CR_ENABLE;				// Вкл. таймера
+	LPTIM1 -> CR |= LPTIM_CR_CNTSTRT;				// Запуск счёта
 }
 
 
 /* =========================== Основное ============================== */
+/*
+	Каждый тик таймера = 1мкс
+	Каждый _uptime_ms_cnt = 1 мс
+*/
+
 uint32_t millis(void){
 	return _uptime_ms_cnt;
 }
 
 uint32_t micros(void){
-	return ((_uptime_ms_cnt * 1000UL) + LPTIM1 -> CNT);
+	return ((_uptime_ms_cnt * 1000UL) + LPTIM1 -> CNT);	
 }
 
 void delayMs(uint32_t ms){
